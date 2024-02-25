@@ -19,13 +19,13 @@ def remove_outliers(arr):
 
 intervals = [1, 2, 3, 4, 5, 6, 8, 10]
 lengths = [60, 55, 45, 30, 20, 15, 10, 5]
-interval_offset = 7
+interval_offset = 6
 
-length_offset = 7
+length_offset = 4
 
 sounds = ["BUZZ    OGG", "BELL    OGG", "GONG    OGG", "BING    OGG",
           "BOWL    OGG", "TING    OGG", "BEEP    OGG", "CLANG   OGG"]
-sound_offset = 7
+sound_offset = 4
 
 
 class Accelerometer:
@@ -147,7 +147,8 @@ class Accelerometer:
 led = digitalio.DigitalInOut(board.LED)
 led.direction = digitalio.Direction.OUTPUT
 time.sleep(1)
-sound = Soundboard("GP0", "GP1", "GP2", debug=True, vol=0.1)
+sound = Soundboard("GP0", "GP1", "GP2", debug=True, vol=None)
+
 
 index = 0
 last_position = 1
@@ -176,29 +177,27 @@ while True:
     lastangle1 = angle1
 
     lastangle3 = angle3
-    # sound.play_now(index % 8)
-    # index = (index + 1) % 5
-    # angle1, tilt1 = read_angle(board.GP21, board.GP20, history1)
-    angle3, angle3_changed = accel3.read_angle()
-    if (angle3_changed):
-        programStartTime = time.monotonic()
-        intervalStartTime = time.monotonic()
-        interval = intervals[((9-angle3)+interval_offset) % 8]
-        print('Interval1', interval)
 
-    angle1, angle1_changed = accel1.read_angle()
+    angle3, angle3_changed = accel3.read_angle()
+    angle1, angle1_changed = accel2.read_angle()
+    angle2, angle2_changed = accel1.read_angle()
+    if (angle3_changed):
+        interval = intervals[(angle3+interval_offset) % 8]
+        print('Interval ', interval)
+
     if (angle1_changed):
-        programStartTime = time.monotonic()
-        intervalStartTime = time.monotonic()
-        duration = lengths[((9-angle1)+length_offset) % 8]
+        duration = lengths[((angle1)+length_offset) % 8]
         print('Duration', duration)
-    angle2, angle2_changed = accel2.read_angle()
+
     if (angle2_changed):
+        selectedSound = sounds[((angle2)+sound_offset) % 8]
+        print('Sound ', selectedSound)
+
+    if (angle2_changed or angle1_changed or angle3_changed):
+        # We have a change, restart the program and play the first sound
+        print('Restarting...')
         programStartTime = time.monotonic()
         intervalStartTime = time.monotonic()
-        selectedSound = sounds[((9-angle2)+sound_offset) % 8]
-        print('Angle 2', angle2)
-        print('Angle 2', sound)
         sound._send_simple(b"q")
         sound._send_simple(
             bytes("P"+selectedSound, "utf-8"))
