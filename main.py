@@ -28,6 +28,14 @@ sounds = ["BUZZ    OGG", "BELL    OGG", "GONG    OGG", "BING    OGG",
 sound_offset = 4
 
 
+def reset_soundboard(sb):
+    sb._send_simple(b"q")
+
+
+def playsound(sb, sound):
+    sb._send_simple(bytes("P"+sound, "utf-8"))
+
+
 class Accelerometer:
     def __init__(self, sda, scl):
         self.sda = sda
@@ -85,12 +93,7 @@ class Accelerometer:
 
             if (y == 0):
                 y = 0.001
-            angle2 = math.atan(z / y) * 360 / math.pi / 2
-            if y < 0:
-                angle2 = 180 - math.atan(z / -y) * 360 / math.pi / 2
-            else:
-                if z < 0:
-                    angle2 = 360 + math.atan(z / y) * 360 / math.pi / 2
+
             accel.deinit()
             self.history.append(angle)
             if (len(self.history) > 10):
@@ -102,8 +105,6 @@ class Accelerometer:
             else:
                 cleaned = self.history
 
-            # if (len(cleaned) == 0):
-            #     cleaned = history
             angle = cleaned[0]
             for i in range(1, len(cleaned)-1):
                 angle = 0.9 * angle + 0.1 * cleaned[i]
@@ -142,13 +143,10 @@ class Accelerometer:
             return 0, False
 
 
-# https://github.com/mmabey/Adafruit_Soundboard
-
 led = digitalio.DigitalInOut(board.LED)
 led.direction = digitalio.Direction.OUTPUT
-time.sleep(1)
 sound = Soundboard("GP0", "GP1", "GP2", debug=True, vol=None)
-
+reset_soundboard(sound)
 
 index = 0
 last_position = 1
@@ -170,37 +168,47 @@ intervalStartTime = -1
 accel1 = Accelerometer(scl=board.GP21, sda=board.GP20)
 accel2 = Accelerometer(scl=board.GP17, sda=board.GP16)
 accel3 = Accelerometer(scl=board.GP19, sda=board.GP18)
+
+lastchange = time.monotonic()
+change = False
 while True:
     led.value = True
     time.sleep(0.01)
     led.value = False
-    lastangle1 = angle1
 
-    lastangle3 = angle3
-
-    angle3, angle3_changed = accel3.read_angle()
     angle1, angle1_changed = accel2.read_angle()
     angle2, angle2_changed = accel1.read_angle()
+    angle3, angle3_changed = accel3.read_angle()
     if (angle3_changed):
         interval = intervals[(angle3+interval_offset) % 8]
+        lastchange = time.monotonic()
+        change = True
         print('Interval ', interval)
 
     if (angle1_changed):
         duration = lengths[((angle1)+length_offset) % 8]
+        lastchange = time.monotonic()
+        change = True
         print('Duration', duration)
 
     if (angle2_changed):
         selectedSound = sounds[((angle2)+sound_offset) % 8]
+        lastchange = time.monotonic()
+        change = True
         print('Sound ', selectedSound)
 
-    if (angle2_changed or angle1_changed or angle3_changed):
-        # We have a change, restart the program and play the first sound
+    # Give a second for all of the readings to settle down and to set their new values
+    if (change and time.monotonic() - lastchange > 1):
+
+        # We have a change, restart the program and play the first sound, but make sure it's been more than a second since
+        # the last restart
         print('Restarting...')
         programStartTime = time.monotonic()
         intervalStartTime = time.monotonic()
-        sound._send_simple(b"q")
-        sound._send_simple(
-            bytes("P"+selectedSound, "utf-8"))
+        success = False
+        reset_soundboard(sound)
+        playsound(sound, selectedSound)
+        change = False
 
     if (programStartTime > 0 and time.monotonic() - programStartTime > duration * 60):
         # We are done
@@ -208,20 +216,21 @@ while True:
 
         programStartTime = -1
         intervalStartTime = -1
-        sound._send_simple(b"q")
-        sound._send_simple(bytes("P"+selectedSound, "utf-8"))
+        reset_soundboard(sound)
+        playsound(sound, selectedSound)
         time.sleep(5)
-        sound._send_simple(b"q")
-        sound._send_simple(bytes("P"+selectedSound, "utf-8"))
+        reset_soundboard(sound)
+        playsound(sound, selectedSound)
         time.sleep(5)
-        sound._send_simple(b"q")
-        sound._send_simple(bytes("P"+selectedSound, "utf-8"))
+        reset_soundboard(sound)
+        playsound(sound, selectedSound)
 
     if (interval > 0 and programStartTime > 0 and time.monotonic() - intervalStartTime > (duration / interval) * 60):
         # We play a sound
         print('Play sound', time.monotonic() - intervalStartTime)
         print('Play sound', duration, interval)
         print('Play sound', (duration / interval) * 60)
-        sound._send_simple(b"q")
-        sound._send_simple(bytes("P"+selectedSound, "utf-8"))
+        reset_soundboard(sound)
+        playsound(sound, selectedSound)
+
         intervalStartTime = time.monotonic()
